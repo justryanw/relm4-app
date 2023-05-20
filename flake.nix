@@ -40,6 +40,10 @@
         default = pkgs.mkShell {
           # The Nix packages provided in the environment
           packages = (with pkgs; [
+            gtk4
+            libadwaita
+            pkg-config
+            
             # The package provided by our custom overlay. Includes cargo, Clippy, cargo-fmt,
             # rustdoc, rustfmt, and other tools.
             rustToolchain
@@ -54,6 +58,15 @@
           cargoLock = {
             lockFile = ./Cargo.lock;
           };
+
+          nativeBuildInputs = (with pkgs; [
+            pkg-config
+          ]);
+
+          buildInputs = (with pkgs; [
+            gtk4
+            libadwaita
+          ]);
         };
       });
     };
