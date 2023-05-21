@@ -38,6 +38,9 @@
       # Development environment output
       devShells = forAllSystems ({ pkgs }: {
         default = pkgs.mkShell {
+          # Fix rust-analyzer in vscode complaing about sysroot
+          RUST_SRC_PATH = "${pkgs.rustPlatform.rustLibSrc}";
+
           # The Nix packages provided in the environment
           packages = (with pkgs; [
             gtk4
