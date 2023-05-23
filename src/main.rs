@@ -1,87 +1,128 @@
-use relm4::{
-    gtk::{
-        self,
-        traits::{BoxExt, ButtonExt, GtkWindowExt, OrientableExt},
-        Orientation,
-    },
-    ComponentParts, ComponentSender, RelmApp, RelmWidgetExt, SimpleComponent,
-};
+use gtk::prelude::{BoxExt, ButtonExt, OrientableExt};
+use rand::prelude::IteratorRandom;
+use relm4::{gtk, ComponentParts, ComponentSender, RelmApp, RelmWidgetExt, SimpleComponent};
 
+const ICON_LIST: &[&str] = &[
+    "bookmark-new-symbolic",
+    "edit-copy-symbolic",
+    "edit-cut-symbolic",
+    "edit-find-symbolic",
+    "starred-symbolic",
+    "system-run-symbolic",
+    "emoji-objects-symbolic",
+    "emoji-nature-symbolic",
+    "display-brightness-symbolic",
+];
+
+fn random_icon_name() -> &'static str {
+    ICON_LIST
+        .iter()
+        .choose(&mut rand::thread_rng())
+        .expect("Could not choose a random icon")
+}
+
+// The track proc macro allows to easily track changes to different
+// fields of the model
+#[tracker::track]
 struct AppModel {
-    counter: u8,
+    first_icon: &'static str,
+    second_icon: &'static str,
+    identical: bool,
 }
 
 #[derive(Debug)]
-enum AppMsg {
-    Increment,
-    Decrement,
+enum AppInput {
+    UpdateFirst,
+    UpdateSecond,
 }
 
 #[relm4::component]
 impl SimpleComponent for AppModel {
-    type Init = u8;
-
-    type Input = AppMsg;
+    type Init = ();
+    type Input = AppInput;
     type Output = ();
 
     view! {
-        gtk::Window {
-            set_title: Some("Simple app"),
-            set_default_width: 300,
-            set_default_height: 100,
-
+        #[root]
+        gtk::ApplicationWindow {
+            #[track = "model.changed(AppModel::identical())"]
+            set_class_active: ("identical", model.identical),
             gtk::Box {
-                set_orientation: Orientation::Vertical,
-                set_spacing: 5,
-                set_margin_all: 5,
-
-                gtk::Button {
-                    set_label: "Increment",
-                    connect_clicked[sender] => move |_| {
-                        sender.input(AppMsg::Increment);
+                set_orientation: gtk::Orientation::Horizontal,
+                set_spacing: 10,
+                set_margin_all: 10,
+                gtk::Box {
+                    set_orientation: gtk::Orientation::Vertical,
+                    set_spacing: 10,
+                    gtk::Image {
+                        set_pixel_size: 50,
+                        #[track = "model.changed(AppModel::first_icon())"]
+                        set_icon_name: Some(model.first_icon),
+                    },
+                    gtk::Button {
+                        set_label: "New random image",
+                        connect_clicked[sender] => move |_| {
+                            sender.input(AppInput::UpdateFirst)
+                        }
                     }
                 },
-
-                gtk::Button::with_label("Decrement") {
-                    connect_clicked[sender] => move |_| {
-                        sender.input(AppMsg::Decrement);
+                append = &gtk::Box {
+                    set_orientation: gtk::Orientation::Vertical,
+                    set_spacing: 10,
+                    gtk::Image {
+                        set_pixel_size: 50,
+                        #[track = "model.changed(AppModel::second_icon())"]
+                        set_icon_name: Some(model.second_icon),
+                    },
+                    gtk::Button {
+                        set_label: "New random image",
+                        connect_clicked[sender] => move |_| {
+                            sender.input(AppInput::UpdateSecond)
+                        }
                     }
                 },
-
-                gtk::Label {
-                    #[watch]
-                    set_label: &format!("Counter: {}", model.counter),
-                    set_margin_all: 5,
-                }
             }
         }
     }
 
+    // Initialize the UI.
     fn init(
-        counter: Self::Init,
-        window: &Self::Root,
+        _params: Self::Init,
+        root: &Self::Root,
         sender: ComponentSender<Self>,
     ) -> ComponentParts<Self> {
-        let model = AppModel { counter };
+        let model = AppModel {
+            first_icon: random_icon_name(),
+            second_icon: random_icon_name(),
+            identical: false,
+            tracker: 0,
+        };
 
+        relm4::set_global_css(".identical { background: #00ad5c; }");
+
+        // Insert the macro code generation here
         let widgets = view_output!();
 
         ComponentParts { model, widgets }
     }
 
-    fn update(&mut self, message: Self::Input, sender: ComponentSender<Self>) {
+    fn update(&mut self, message: Self::Input, _sender: ComponentSender<Self>) {
+        // reset tracker value of the model
+        self.reset();
+
         match message {
-            AppMsg::Increment => {
-                self.counter = self.counter.saturating_add(1);
+            AppInput::UpdateFirst => {
+                self.set_first_icon(random_icon_name());
             }
-            AppMsg::Decrement => {
-                self.counter = self.counter.saturating_sub(1);
+            AppInput::UpdateSecond => {
+                self.set_second_icon(random_icon_name());
             }
         }
+        self.set_identical(self.first_icon == self.second_icon);
     }
 }
 
 fn main() {
-    let app = RelmApp::new("relm4.test.simple_maual");
-    app.run::<AppModel>(0);
+    let app: RelmApp = RelmApp::new("relm4.test.simple");
+    app.run::<AppModel>(());
 }
