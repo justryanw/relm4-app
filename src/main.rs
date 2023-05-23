@@ -1,87 +1,104 @@
-use relm4::{
-    gtk::{
-        self,
-        traits::{BoxExt, ButtonExt, GtkWindowExt, OrientableExt},
-        Orientation,
-    },
-    ComponentParts, ComponentSender, RelmApp, RelmWidgetExt, SimpleComponent,
+use gtk::prelude::{
+    ApplicationExt, GtkWindowExt,
 };
+use relm4::*;
 
-struct AppModel {
-    counter: u8,
+mod header;
+use header::{ HeaderModel, HeaderOutput };
+
+mod dialog;
+use dialog::{ DialogModel, DialogInput, DialogOutput };
+
+#[derive(Debug)]
+enum AppMode {
+    View,
+    Edit,
+    Export,
 }
 
 #[derive(Debug)]
 enum AppMsg {
-    Increment,
-    Decrement,
+    SetMode(AppMode),
+    CloseRequest,
+    Close,
+}
+
+struct AppModel {
+    mode: AppMode,
+    header: Controller<HeaderModel>,
+    dialog: Controller<DialogModel>,
 }
 
 #[relm4::component]
 impl SimpleComponent for AppModel {
-    type Init = u8;
-
+    type Init = AppMode;
     type Input = AppMsg;
     type Output = ();
 
     view! {
-        gtk::Window {
-            set_title: Some("Simple app"),
-            set_default_width: 300,
-            set_default_height: 100,
+        main_window = gtk::Window {
+            set_default_width: 500,
+            set_default_height: 250,
+            set_titlebar: Some(model.header.widget()),
 
-            gtk::Box {
-                set_orientation: Orientation::Vertical,
-                set_spacing: 5,
-                set_margin_all: 5,
-
-                gtk::Button {
-                    set_label: "Increment",
-                    connect_clicked[sender] => move |_| {
-                        sender.input(AppMsg::Increment);
-                    }
-                },
-
-                gtk::Button::with_label("Decrement") {
-                    connect_clicked[sender] => move |_| {
-                        sender.input(AppMsg::Decrement);
-                    }
-                },
-
-                gtk::Label {
-                    #[watch]
-                    set_label: &format!("Counter: {}", model.counter),
-                    set_margin_all: 5,
-                }
+            gtk::Label {
+                #[watch]
+                set_label: &format!("Placeholder for {:?}", model.mode),
+            },
+            connect_close_request[sender] => move |_| {
+                sender.input(AppMsg::CloseRequest);
+                gtk::Inhibit(true)
             }
         }
     }
 
     fn init(
-        counter: Self::Init,
-        window: &Self::Root,
+        params: Self::Init,
+        root: &Self::Root,
         sender: ComponentSender<Self>,
     ) -> ComponentParts<Self> {
-        let model = AppModel { counter };
+        let header: Controller<HeaderModel> =
+            HeaderModel::builder()
+                .launch(())
+                .forward(sender.input_sender(), |msg| match msg {
+                    HeaderOutput::View => AppMsg::SetMode(AppMode::View),
+                    HeaderOutput::Edit => AppMsg::SetMode(AppMode::Edit),
+                    HeaderOutput::Export => AppMsg::SetMode(AppMode::Export),
+                });
+
+        let dialog = DialogModel::builder()
+            .transient_for(root)
+            .launch(true)
+            .forward(sender.input_sender(), |msg| match msg {
+                DialogOutput::Close => AppMsg::Close,
+            });
+
+        let model = AppModel {
+            mode: params,
+            header,
+            dialog,
+        };
 
         let widgets = view_output!();
-
         ComponentParts { model, widgets }
     }
 
-    fn update(&mut self, message: Self::Input, sender: ComponentSender<Self>) {
-        match message {
-            AppMsg::Increment => {
-                self.counter = self.counter.saturating_add(1);
+    fn update(&mut self, msg: Self::Input, _sender: ComponentSender<Self>) {
+        match msg {
+            AppMsg::SetMode(mode) => {
+                self.mode = mode;
             }
-            AppMsg::Decrement => {
-                self.counter = self.counter.saturating_sub(1);
+            AppMsg::CloseRequest => {
+                self.dialog.sender().send(DialogInput::Show).unwrap();
+            }
+            AppMsg::Close => {
+                relm4::main_application().quit();
             }
         }
     }
 }
 
 fn main() {
-    let app = RelmApp::new("relm4.test.simple_maual");
-    app.run::<AppModel>(0);
+    let relm = RelmApp::new("ewlm4.test.components");
+    relm.run::<AppModel>(AppMode::Edit);
 }
