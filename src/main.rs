@@ -100,5 +100,5 @@ impl SimpleComponent for AppModel {
 
 fn main() {
     let relm = RelmApp::new("ewlm4.test.components");
-    relm.run::<AppModel>(AppMode::Edit);
+    relm.run::<AppModel>(AppMode::View);
 }
